@@ -1,11 +1,10 @@
 import os
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title="KMP Real Estate Lead Detection")
+app = FastAPI()
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -95,7 +94,7 @@ LOGIN_HTML = """
 
 @app.get("/")
 async def root():
-    return {"message": "KMP Real Estate"}
+    return RedirectResponse(url="/dashboard", status_code=302)
 
 @app.get("/api/login-page")
 async def login_page():
@@ -103,35 +102,33 @@ async def login_page():
 
 @app.post("/api/login")
 async def login(request: Request):
-    form = await request.form()
-    username = form.get("username")
-    password = form.get("password")
-    
-    if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
-        response = RedirectResponse(url="/dashboard", status_code=302)
-        response.set_cookie(key="auth_token", value="authenticated", httponly=True)
-        return response
-    
-    return HTMLResponse(LOGIN_HTML + "<script>document.getElementById('error').style.display='block';</script>")
+    try:
+        form = await request.form()
+        username = form.get("username")
+        password = form.get("password")
+        
+        if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
+            response = RedirectResponse(url="/dashboard", status_code=302)
+            response.set_cookie(key="auth_token", value="authenticated", httponly=True)
+            return response
+        
+        return HTMLResponse(LOGIN_HTML + "<script>document.getElementById('error').style.display='block';</script>")
+    except Exception as e:
+        return HTMLResponse(LOGIN_HTML + "<script>document.getElementById('error').style.display='block';</script>")
 
 @app.get("/dashboard")
 async def get_dashboard(request: Request):
-    auth = request.cookies.get("auth_token")
-    if auth != "authenticated":
+    try:
+        auth = request.cookies.get("auth_token")
+        if auth != "authenticated":
+            return RedirectResponse(url="/api/login-page", status_code=302)
+        return FileResponse("dashboard.html", media_type="text/html")
+    except:
         return RedirectResponse(url="/api/login-page", status_code=302)
-    return FileResponse("dashboard.html", media_type="text/html")
 
 @app.get("/health")
-async def health_check():
-    return JSONResponse({"status": "healthy"})
-
-@app.get("/api/reddit/leads")
-async def get_leads():
-    return JSONResponse({"leads": [], "total": 0})
-
-@app.get("/api/trends/market-signal")
-async def market_signal():
-    return JSONResponse({"overall_trend": "stable", "trend_strength": 0, "top_cities": ["Dubai", "Abu Dhabi", "Sharjah"]})
+async def health():
+    return JSONResponse({"status": "ok"})
 
 if __name__ == "__main__":
     import uvicorn
