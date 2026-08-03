@@ -13,8 +13,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "kmp")
-DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "kmp123")
+# HARDCODED CREDENTIALS
+DASHBOARD_USERNAME = "kmp"
+DASHBOARD_PASSWORD = "Pakistan@2853"
 
 LOGIN_HTML = """
 <!DOCTYPE html>
@@ -65,7 +66,7 @@ LOGIN_HTML = """
             font-weight: 600;
             cursor: pointer;
         }
-        .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; }
+        .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; font-size: 14px; }
     </style>
 </head>
 <body>
@@ -75,7 +76,7 @@ LOGIN_HTML = """
             <h1>KMP Real Estate</h1>
             <p>Lead Detection Dashboard</p>
         </div>
-        <div class="error" id="error">Invalid credentials</div>
+        <div class="error" id="error">Invalid username or password</div>
         <form method="POST" action="/api/login">
             <div class="form-group">
                 <label>Username</label>
@@ -102,33 +103,30 @@ async def login_page():
 
 @app.post("/api/login")
 async def login(request: Request):
-    try:
-        form = await request.form()
-        username = form.get("username")
-        password = form.get("password")
-        
-        if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
-            response = RedirectResponse(url="/dashboard", status_code=302)
-            response.set_cookie(key="auth_token", value="authenticated", httponly=True)
-            return response
-        
-        return HTMLResponse(LOGIN_HTML + "<script>document.getElementById('error').style.display='block';</script>")
-    except Exception as e:
-        return HTMLResponse(LOGIN_HTML + "<script>document.getElementById('error').style.display='block';</script>")
+    form = await request.form()
+    username = form.get("username", "").strip()
+    password = form.get("password", "").strip()
+    
+    print(f"Login attempt: {username} / {password}")
+    print(f"Expected: {DASHBOARD_USERNAME} / {DASHBOARD_PASSWORD}")
+    
+    if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
+        response = RedirectResponse(url="/dashboard", status_code=302)
+        response.set_cookie(key="auth_token", value="authenticated", httponly=True, max_age=86400)
+        return response
+    
+    return HTMLResponse(LOGIN_HTML + "<script>document.getElementById('error').style.display='block';</script>")
 
 @app.get("/dashboard")
 async def get_dashboard(request: Request):
-    try:
-        auth = request.cookies.get("auth_token")
-        if auth != "authenticated":
-            return RedirectResponse(url="/api/login-page", status_code=302)
-        return FileResponse("dashboard.html", media_type="text/html")
-    except:
+    auth = request.cookies.get("auth_token")
+    if auth != "authenticated":
         return RedirectResponse(url="/api/login-page", status_code=302)
+    return FileResponse("dashboard.html", media_type="text/html")
 
 @app.get("/health")
 async def health():
-    return JSONResponse({"status": "ok"})
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
