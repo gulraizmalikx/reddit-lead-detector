@@ -1,10 +1,19 @@
 import os
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="KMP Real Estate Lead Detection")
 
-# Credentials
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 DASHBOARD_USERNAME = os.getenv("DASHBOARD_USERNAME", "kmp")
 DASHBOARD_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "kmp123")
 
@@ -57,7 +66,6 @@ LOGIN_HTML = """
             font-weight: 600;
             cursor: pointer;
         }
-        button:hover { transform: translateY(-2px); }
         .error { background: #fee2e2; color: #991b1b; padding: 12px; border-radius: 8px; margin-bottom: 20px; display: none; }
     </style>
 </head>
@@ -87,7 +95,7 @@ LOGIN_HTML = """
 
 @app.get("/")
 async def root():
-    return {"message": "KMP Real Estate - Visit /dashboard"}
+    return {"message": "KMP Real Estate"}
 
 @app.get("/api/login-page")
 async def login_page():
@@ -115,15 +123,15 @@ async def get_dashboard(request: Request):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    return JSONResponse({"status": "healthy"})
 
 @app.get("/api/reddit/leads")
 async def get_leads():
-    return {"leads": [], "total": 0}
+    return JSONResponse({"leads": [], "total": 0})
 
 @app.get("/api/trends/market-signal")
 async def market_signal():
-    return {"overall_trend": "stable", "top_cities": []}
+    return JSONResponse({"overall_trend": "stable", "trend_strength": 0, "top_cities": ["Dubai", "Abu Dhabi", "Sharjah"]})
 
 if __name__ == "__main__":
     import uvicorn
