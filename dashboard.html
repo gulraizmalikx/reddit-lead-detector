@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KMP Real Estate - Lead Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        .header {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-logo {
+            height: 70px;
+            width: auto;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+        }
+
+        .header-text h1 {
+            color: #1e3a8a;
+            font-size: 28px;
+            margin: 0;
+            margin-bottom: 5px;
+        }
+
+        .header-text p {
+            color: #0369a1;
+            font-size: 13px;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .status-badge {
+            background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background: #4ade80;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-number {
+            font-size: 32px;
+            font-weight: bold;
+            color: #1e3a8a;
+            margin-bottom: 5px;
+        }
+
+        .stat-change {
+            font-size: 12px;
+            color: #4ade80;
+        }
+
+        /* Main Content */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Leads Section */
+        .section {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 25px;
+            background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%);
+            border-radius: 2px;
+        }
+
+        /* Lead Card */
+        .lead-card {
+            background: #f8f9fa;
+            border-left: 4px solid #1e3a8a;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .lead-card:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 15px rgba(30, 58, 138, 0.2);
+            border-left-color: #0369a1;
+        }
+
+        .lead-card.high {
+            border-left-color: #10b981;
+            background: #f0fdf4;
+        }
+
+        .lead-card.medium {
+            border-left-color: #f59e0b;
+            background: #fffbf0;
+        }
+
+        .lead-card.low {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .lead-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 10px;
+        }
+
+        .lead-name {
+            font-weight: bold;
+            font-size: 15px;
+            color: #333;
+        }
+
+        .lead-quality {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .quality-high { background: #d1fae5; color: #065f46; }
+        .quality-medium { background: #fef3c7; color: #92400e; }
+        .quality-low { background: #fee2e2; color: #7f1d1d; }
+
+        .lead-details {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .lead-detail-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .lead-detail-label {
+            font-weight: 600;
+            color: #333;
+            min-width: 70px;
+        }
+
+        .lead-confidence {
+            font-size: 12px;
+            color: #1e3a8a;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+
+        /* Market Signal */
+        .market-signal {
+            background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+
+        .market-trend {
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .market-detail {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 5px;
+        }
+
+        .market-action {
+            background: rgba(255,255,255,0.2);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        /* Filter Buttons */
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 8px 15px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, #1e3a8a 0%, #0369a1 100%);
+            color: white;
+            border-color: #1e3a8a;
+        }
+
+        .filter-btn:hover {
+            border-color: #1e3a8a;
+        }
+
+        /* No Data */
+        .no-data {
+            text-align: center;
+            color: #999;
+            padding: 30px;
+            font-size: 14px;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 25px;
+            font-size: 13px;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .loading-dot {
+            width: 8px;
+            height: 8px;
+            background: #1e3a8a;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite;
+        }
+
+        .loading-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .loading-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-left {
+                width: 100%;
+                flex-direction: column;
+            }
+
+            .status-badge {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .section {
+                padding: 15px;
+            }
+
+            .lead-card {
+                padding: 12px;
+            }
+
+            .lead-name {
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <img src="https://raw.githubusercontent.com/gulraizmalikx/reddit-lead-detector/main/KMP-LOGO.png" 
+                     class="header-logo" alt="KMP Real Estate Logo">
+                <div class="header-text">
+                    <h1>KMP REAL ESTATE</h1>
+                    <p>AI-Powered Lead Dashboard</p>
+                </div>
+            </div>
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span id="status">LIVE</span>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Leads</h3>
+                <div class="stat-number" id="total-leads">0</div>
+                <div class="stat-change">↑ Today</div>
+            </div>
+            <div class="stat-card">
+                <h3>High Quality</h3>
+                <div class="stat-number" id="high-quality">0</div>
+                <div class="stat-change">🔥 Hot</div>
+            </div>
+            <div class="stat-card">
+                <h3>Market Trend</h3>
+                <div class="stat-number" id="market-trend">--</div>
+                <div class="stat-change">Real-time</div>
+            </div>
+            <div class="stat-card">
+                <h3>System Status</h3>
+                <div class="stat-number" style="color: #10b981;">✓</div>
+                <div class="stat-change">All Systems Go</div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Leads Section -->
+            <div class="section">
+                <div class="section-title">📌 Latest Leads</div>
+                
+                <div class="filters">
+                    <button class="filter-btn active" onclick="filterLeads('all')">All</button>
+                    <button class="filter-btn" onclick="filterLeads('high')">🔥 High</button>
+                    <button class="filter-btn" onclick="filterLeads('medium')">🟡 Medium</button>
+                    <button class="filter-btn" onclick="filterLeads('low')">⚪ Low</button>
+                </div>
+
+                <div id="leads-container">
+                    <div class="loading">
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Market Section -->
+            <div class="section">
+                <div class="section-title">📊 Market Intelligence</div>
+                
+                <div id="market-container">
+                    <div class="market-signal">
+                        <div class="market-detail">Loading market data...</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <h3 style="color: #333; margin-bottom: 10px; font-size: 15px;">🌍 Top Cities</h3>
+                    <div id="cities-container" style="font-size: 13px; color: #666; line-height: 1.8;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>🚀 KMP Real Estate AI Lead Detection System</p>
+            <p>Last updated: <span id="last-update">--:--</span> | Auto-refresh every 5 seconds</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let allLeads = [];
+        let currentFilter = 'all';
+
+        // Fetch leads
+        async function
