@@ -1,5 +1,6 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 python-multipart
-praw==7.7.0
 anthropic==0.7.8
+requests
+beautifulsoup4
