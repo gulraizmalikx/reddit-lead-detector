@@ -2,11 +2,16 @@ import os
 import json
 import asyncio
 import requests
+import logging
 from datetime import datetime
 from bs4 import BeautifulSoup
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
 from anthropic import Anthropic
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 DASHBOARD_USERNAME = "kmp"
 DASHBOARD_PASSWORD = "Pakistan@2853"
@@ -26,6 +31,7 @@ DASHBOARD_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name=
 async def analyze_with_claude(text):
     """Analyze with Claude AI"""
     try:
+        logger.info(f"Analyzing text: {text[:100]}...")
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
             max_tokens=150,
@@ -38,40 +44,49 @@ COLD = just mentioning property
 
 Post: {text[:300]}"""}]
         )
-        try:
-            return json.loads(response.content[0].text)
-        except:
-            return {"quality": "cold"}
-    except:
+        result = json.loads(response.content[0].text)
+        logger.info(f"Claude response: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Claude analysis error: {e}")
         return {"quality": "cold"}
 
 async def scrape_reddit():
     """Scrape Reddit for leads"""
+    logger.info("🔍 STARTING REDDIT MONITORING...")
     subreddits = ["realestate", "dubai", "UAE", "property"]
+    leads_found = 0
     
     for sub in subreddits:
         try:
+            logger.info(f"📍 Checking r/{sub}...")
             url = f"https://www.reddit.com/r/{sub}/new.json"
             headers = {"User-Agent": "KMP-LeadDetector/1.0"}
             response = requests.get(url, headers=headers, timeout=10)
             
             if response.status_code != 200:
+                logger.warning(f"❌ Failed to fetch r/{sub}: {response.status_code}")
                 continue
             
+            logger.info(f"✅ Successfully fetched r/{sub}")
             data = response.json()
             posts = data.get("data", {}).get("children", [])
+            logger.info(f"Found {len(posts)} posts in r/{sub}")
             
             for post in posts[:5]:
                 post_data = post.get("data", {})
                 post_id = post_data.get("id")
                 
                 if any(l["id"] == post_id for l in leads_storage["leads"]):
+                    logger.info(f"⏭️  Post already exists: {post_id}")
                     continue
                 
                 title = post_data.get("title", "")
                 content = post_data.get("selftext", "")
+                logger.info(f"📝 Analyzing: {title[:80]}")
                 
                 analysis = await analyze_with_claude(f"{title} {content}")
+                logger.info(f"Result: {analysis.get('quality').upper()}")
                 
                 if analysis.get("quality") in ["hot", "warm"]:
                     lead = {
@@ -83,16 +98,21 @@ async def scrape_reddit():
                     }
                     
                     leads_storage["leads"].insert(0, lead)
+                    leads_found += 1
+                    logger.info(f"✨ LEAD ADDED: {title[:50]} ({analysis.get('quality').upper()})")
+                    
                     if len(leads_storage["leads"]) > 50:
                         leads_storage["leads"] = leads_storage["leads"][:50]
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Error scraping r/{sub}: {e}")
     
     # Update stats
     leads_storage["stats"]["total"] = len(leads_storage["leads"])
     leads_storage["stats"]["hot"] = len([l for l in leads_storage["leads"] if l["quality"] == "hot"])
     leads_storage["stats"]["warm"] = len([l for l in leads_storage["leads"] if l["quality"] == "warm"])
     leads_storage["stats"]["cold"] = len([l for l in leads_storage["leads"] if l["quality"] == "cold"])
+    
+    logger.info(f"✅ MONITORING COMPLETE - Found {leads_found} new leads - Total: {leads_storage['stats']['total']}")
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -108,9 +128,12 @@ async def auth(request: Request):
         if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
             response = Response(content=DASHBOARD_HTML, media_type="text/html")
             response.set_cookie(key="auth", value="ok", httponly=True, max_age=86400)
+            logger.info(f"✅ Login successful for user: {username}")
             return response
+        logger.warning(f"❌ Failed login attempt")
         return HTMLResponse(LOGIN_HTML, status_code=401)
-    except:
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
         return HTMLResponse(LOGIN_HTML, status_code=400)
 
 @app.get("/dashboard", response_class=HTMLResponse)
@@ -131,21 +154,26 @@ async def get_leads():
 
 @app.get("/health")
 async def health():
+    logger.info("Health check")
     return {"status": "✅ Running"}
 
 @app.on_event("startup")
 async def startup():
+    logger.info("🚀 APP STARTING - MONITORING WILL BEGIN")
     asyncio.create_task(monitor_loop())
 
 async def monitor_loop():
+    logger.info("📡 Monitor loop started")
     while True:
         try:
             await scrape_reddit()
-        except:
-            pass
+        except Exception as e:
+            logger.error(f"Monitor loop error: {e}")
+        logger.info("⏰ Waiting 600 seconds until next check...")
         await asyncio.sleep(600)
 
 if __name__ == "__main__":
     import uvicorn
     PORT = int(os.getenv("PORT", 8000))
+    logger.info(f"Starting server on port {PORT}")
     uvicorn.run(app, host="0.0.0.0", port=PORT)
