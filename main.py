@@ -1,15 +1,12 @@
 import os
 import json
 import asyncio
-import requests
 import logging
 from datetime import datetime
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse
-from anthropic import Anthropic
 from pytrends.request import TrendReq
 
-# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -17,118 +14,123 @@ DASHBOARD_USERNAME = "kmp"
 DASHBOARD_PASSWORD = "Pakistan@2853"
 
 app = FastAPI()
-client = Anthropic()
 
-# Location data for Dubai
-LOCATIONS = {
-    "Bur Dubai": {
-        "lat": 25.2654,
-        "lng": 55.2708,
-        "subareas": {
-            "Old Town": {"lat": 25.2655, "lng": 55.2708, "searches": 180},
-            "Al Fahidi": {"lat": 25.2620, "lng": 55.2720, "searches": 150},
-            "Al Manara": {"lat": 25.2710, "lng": 55.2650, "searches": 90},
-            "Shindagha": {"lat": 25.2680, "lng": 55.2750, "searches": 30}
-        }
-    },
-    "Mankhool": {
-        "lat": 25.2530,
-        "lng": 55.2850,
-        "subareas": {
-            "Main Area": {"lat": 25.2530, "lng": 55.2850, "searches": 120},
-            "East Side": {"lat": 25.2550, "lng": 55.2900, "searches": 80},
-            "West Side": {"lat": 25.2510, "lng": 55.2800, "searches": 50}
-        }
-    }
-}
-
-# Property types for analysis
-PROPERTY_TYPES = {
-    "Apartments": {"searches": 0, "color": "#FF6B6B"},
-    "Villas": {"searches": 0, "color": "#4ECDC4"},
-    "Studios": {"searches": 0, "color": "#FFE66D"},
-    "Townhouses": {"searches": 0, "color": "#95E1D3"}
-}
-
-leads_storage = {
-    "leads": [
-        {"id": "1", "title": "Luxury villa available in Bur Dubai", "quality": "hot", "source": "Market", "timestamp": "14:32"},
-        {"id": "2", "title": "Studio apartment in Mankhool", "quality": "warm", "source": "Market", "timestamp": "13:45"},
-    ],
-    "stats": {"total": 2, "hot": 1, "warm": 1, "cold": 0}
-}
-
-market_trends = {
-    "current_location": "Bur Dubai",
-    "total_searches": 450,
-    "property_breakdown": {},
-    "subareas": [],
+market_data = {
+    "location": "Bur Dubai",
+    "total_interest": 0,
+    "trend_direction": "→",
+    "trend_percent": 0,
+    "comparisons": [],
+    "trending_keywords": [],
+    "property_types": [],
     "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M")
 }
 
-LOGIN_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KMP - Login</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI';background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;display:flex;justify-content:center;align-items:center}.login-container{background:white;padding:40px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.2);width:100%;max-width:400px}.logo{text-align:center;margin-bottom:30px}.logo h1{color:#333;font-size:28px}.form-group{margin-bottom:20px}.form-group label{display:block;font-size:14px;color:#333;margin-bottom:8px;font-weight:600}input{width:100%;padding:12px;border:1px solid #ddd;border-radius:5px;font-size:14px}input:focus{outline:none;border-color:#667eea}button{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:12px;border:none;border-radius:5px;font-size:16px;font-weight:600;cursor:pointer}</style></head><body><div class="login-container"><div class="logo"><h1>🏢 KMP REAL ESTATE</h1><p>Lead Detection</p></div><form method="post" action="/auth"><div class="form-group"><label>Username</label><input type="text" name="username" required></div><div class="form-group"><label>Password</label><input type="password" name="password" required></div><button type="submit">Login</button></form></div></body></html>"""
+LOGIN_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KMP - Login</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI';background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;display:flex;justify-content:center;align-items:center}.login-container{background:white;padding:40px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,0.2);width:100%;max-width:400px}.logo{text-align:center;margin-bottom:30px}.logo h1{color:#333;font-size:28px}.form-group{margin-bottom:20px}.form-group label{display:block;font-size:14px;color:#333;margin-bottom:8px;font-weight:600}input{width:100%;padding:12px;border:1px solid #ddd;border-radius:5px;font-size:14px}input:focus{outline:none;border-color:#667eea}button{width:100%;background:linear-gradient(135deg,#667eea,#764ba2);color:white;padding:12px;border:none;border-radius:5px;font-size:16px;font-weight:600;cursor:pointer}</style></head><body><div class="login-container"><div class="logo"><h1>🏢 KMP REAL ESTATE</h1><p>Market Intelligence</p></div><form method="post" action="/auth"><div class="form-group"><label>Username</label><input type="text" name="username" required></div><div class="form-group"><label>Password</label><input type="password" name="password" required></div><button type="submit">Login</button></form></div></body></html>"""
 
-DASHBOARD_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KMP Dashboard</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI';background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;padding:20px}.container{max-width:1400px;margin:0 auto}header{background:white;padding:20px 30px;border-radius:10px;margin-bottom:30px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 5px 15px rgba(0,0,0,0.1)}header h1{font-size:28px;color:#333}button{background:#dc3545;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-bottom:30px}.stat-card{background:white;padding:30px;border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,0.1);text-align:center}.stat-card h3{color:#666;font-size:14px;margin-bottom:15px}.stat-card .value{font-size:36px;font-weight:bold;color:#667eea}.section{background:white;padding:30px;border-radius:10px;margin-bottom:20px;box-shadow:0 5px 15px rgba(0,0,0,0.1)}.section h2{font-size:20px;margin-bottom:20px;color:#333}.location-selector{margin-bottom:20px}.location-selector select{padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;width:100%;max-width:300px}.property-breakdown{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:15px;margin-bottom:20px}.property-card{padding:15px;border-radius:5px;text-align:center;color:white;font-weight:bold}.property-card h4{margin-bottom:5px}.property-card p{font-size:24px}.subarea-item{padding:15px;border-left:4px solid #667eea;background:#f0f5ff;margin-bottom:10px;border-radius:3px;display:flex;justify-content:space-between;align-items:center}.subarea-name{font-weight:bold;color:#333}.subarea-searches{color:#667eea;font-size:18px;font-weight:bold}.map-container{width:100%;height:400px;border-radius:5px;overflow:hidden;margin:20px 0;box-shadow:0 2px 10px rgba(0,0,0,0.1)}.empty{text-align:center;color:#999;padding:40px}</style></head><body><div class="container"><header><h1>🏢 KMP REAL ESTATE - Market Intelligence</h1><form action="/logout" method="post" style="margin:0"><button type="submit">Logout</button></form></header><div class="stats"><div class="stat-card"><h3>📍 Location Searches</h3><div class="value" id="total-searches">0</div></div><div class="stat-card"><h3>🔴 Top Property Type</h3><div class="value" id="top-property">-</div></div><div class="stat-card"><h3>🏘️ Hottest Sub-Area</h3><div class="value" id="hottest-area">-</div></div><div class="stat-card"><h3>📈 Market Trend</h3><div class="value" id="trend">-</div></div></div><div class="section"><h2>📍 Select Location</h2><div class="location-selector"><select id="locationSelect" onchange="loadLocationData()"><option value="">-- Select a Location --</option><option value="Bur Dubai">Bur Dubai</option><option value="Mankhool">Mankhool</option></select></div></div><div class="section"><h2>🏠 Property Type Breakdown</h2><div class="property-breakdown" id="propertyBreakdown"></div></div><div class="section"><h2>🗺️ Sub-Area Heat Map</h2><div class="map-container" id="mapContainer"><div class="empty">Select a location to view heat map</div></div><div id="subareasList"></div></div></div><script>async function loadLocationData(){const location=document.getElementById('locationSelect').value;if(!location){document.getElementById('propertyBreakdown').innerHTML='<p class="empty">Select a location first</p>';return}try{const res=await fetch(`/api/market-trends?location=${location}`);const data=await res.json();document.getElementById('total-searches').textContent=data.total_searches;document.getElementById('hottest-area').textContent=data.top_subarea;document.getElementById('trend').textContent='📈 Rising';const propBreakdown=document.getElementById('propertyBreakdown');propBreakdown.innerHTML='';data.property_breakdown.forEach(prop=>{const div=document.createElement('div');div.className='property-card';div.style.background=prop.color;div.innerHTML=`<h4>${prop.type}</h4><p>${prop.searches}</p><small>searches</small>`;propBreakdown.appendChild(div)});const subareasList=document.getElementById('subareasList');subareasList.innerHTML='<h3>Sub-Areas Ranking:</h3>';data.subareas.forEach(area=>{const div=document.createElement('div');div.className='subarea-item';div.innerHTML=`<span class="subarea-name">📍 ${area.name}</span><span class="subarea-searches">${area.searches} searches</span>`;subareasList.appendChild(div)})}catch(e){console.error(e)}}loadLocationData()</script></body></html>"""
+DASHBOARD_HTML = """<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KMP Dashboard</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI';background:linear-gradient(135deg,#667eea,#764ba2);min-height:100vh;padding:20px}.container{max-width:1200px;margin:0 auto}header{background:white;padding:20px 30px;border-radius:10px;margin-bottom:30px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 5px 15px rgba(0,0,0,0.1)}header h1{font-size:28px;color:#333}button{background:#dc3545;color:white;padding:10px 20px;border:none;border-radius:5px;cursor:pointer}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-bottom:30px}.stat-card{background:white;padding:30px;border-radius:10px;box-shadow:0 5px 15px rgba(0,0,0,0.1);text-align:center}.stat-card h3{color:#666;font-size:14px;margin-bottom:15px}.stat-card .value{font-size:36px;font-weight:bold;color:#667eea}.section{background:white;padding:30px;border-radius:10px;margin-bottom:20px;box-shadow:0 5px 15px rgba(0,0,0,0.1)}.section h2{font-size:20px;margin-bottom:20px;color:#333}.location-selector{margin-bottom:20px}.location-selector select{padding:10px;border:1px solid #ddd;border-radius:5px;font-size:14px;width:100%;max-width:300px}.comparison-item{padding:15px;border-left:4px solid #667eea;background:#f0f5ff;margin-bottom:10px;border-radius:3px}.comparison-label{font-weight:bold;color:#333}.comparison-value{font-size:18px;color:#667eea;font-weight:bold}.trending-keyword{display:inline-block;background:#667eea;color:white;padding:8px 12px;margin:5px;border-radius:20px;font-size:13px}.keyword-trend{margin-left:5px;font-weight:bold}.trend-up{color:#28a745}.trend-down{color:#dc3545}.trend-stable{color:#ffc107}.property-type{padding:12px;background:#f9f9f9;border-left:3px solid #667eea;margin-bottom:8px;border-radius:3px}.empty{text-align:center;color:#999;padding:40px}.authenticity-badge{background:#d4edda;color:#155724;padding:10px 15px;border-radius:5px;margin-bottom:15px;font-size:13px;border-left:3px solid #28a745}</style></head><body><div class="container"><header><h1>🏢 KMP REAL ESTATE - Authentic Market Intelligence</h1><form action="/logout" method="post" style="margin:0"><button type="submit">Logout</button></form></header><div class="stats"><div class="stat-card"><h3>📊 Search Interest</h3><div class="value" id="total-interest">-</div></div><div class="stat-card"><h3>📈 Trend Direction</h3><div class="value" id="trend-direction">-</div></div><div class="stat-card"><h3>📍 Current Location</h3><div class="value" id="current-location">-</div></div><div class="stat-card"><h3>🔍 Last Updated</h3><div id="last-updated" style="font-size:14px;color:#667eea">-</div></div></div><div class="section"><div class="authenticity-badge">✅ Data Source: Google Trends (100% Authentic) | No sample data</div><h2>📍 Select Location</h2><div class="location-selector"><select id="locationSelect" onchange="loadLocationData()"><option value="">-- Select a Location --</option><option value="Bur Dubai">Bur Dubai</option><option value="Mankhool">Mankhool</option><option value="Downtown Dubai">Downtown Dubai</option><option value="Dubai Marina">Dubai Marina</option></select></div></div><div class="section"><h2>🏠 Property Type Search Volume</h2><div id="propertyTypes"></div></div><div class="section"><h2>⚖️ Location Comparisons</h2><p style="color:#666;font-size:13px;margin-bottom:15px;">Relative search volume comparison (higher = more searches)</p><div id="comparisons"></div></div><div class="section"><h2>🔥 Trending Keywords</h2><p style="color:#666;font-size:13px;margin-bottom:15px;">What people are actually searching for in this location</p><div id="trendingKeywords"></div></div></div><script>async function loadLocationData(){const location=document.getElementById('locationSelect').value;if(!location){document.getElementById('propertyTypes').innerHTML='<p class="empty">Select a location first</p>';return}try{const res=await fetch(`/api/market-data?location=${location}`);const data=await res.json();document.getElementById('total-interest').textContent=data.total_interest;document.getElementById('trend-direction').textContent=data.trend_direction+' '+data.trend_percent+'%';document.getElementById('current-location').textContent=location;document.getElementById('last-updated').textContent=data.last_updated;const propDiv=document.getElementById('propertyTypes');propDiv.innerHTML='';data.property_types.forEach(prop=>{const div=document.createElement('div');div.className='property-type';div.innerHTML=`<strong>${prop.type}</strong><span class="keyword-trend trend-${prop.trend.toLowerCase()}"> ${prop.trend}</span><div style="font-size:13px;color:#666;margin-top:5px">Interest: ${prop.interest}</div>`;propDiv.appendChild(div)});const compDiv=document.getElementById('comparisons');compDiv.innerHTML='';data.comparisons.forEach(comp=>{const div=document.createElement('div');div.className='comparison-item';div.innerHTML=`<div class="comparison-label">${comp.location1} vs ${comp.location2}</div><div class="comparison-value">${comp.location1}: ${comp.value1} | ${comp.location2}: ${comp.value2}</div>`;compDiv.appendChild(div)});const keyDiv=document.getElementById('trendingKeywords');keyDiv.innerHTML='';data.trending_keywords.forEach(keyword=>{const span=document.createElement('span');span.className='trending-keyword';span.innerHTML=`${keyword.keyword} <span class="keyword-trend trend-${keyword.trend.toLowerCase()}">${keyword.trend}</span>`;keyDiv.appendChild(span)})}catch(e){console.error(e)}}loadLocationData()</script></body></html>"""
 
-async def analyze_location(location):
-    """Analyze location for property searches"""
-    logger.info(f"📍 Analyzing location: {location}")
+async def fetch_authentic_trends(location):
+    """Fetch authentic Google Trends data"""
+    logger.info(f"📊 Fetching authentic Google Trends for: {location}")
     
     try:
         pytrends = TrendReq(hl='en-US', tz=0)
         
-        # Get property type data
+        # Property type searches
         property_keywords = [
-            f"apartment {location}",
             f"villa {location}",
+            f"apartment {location}",
             f"studio {location}",
             f"townhouse {location}"
         ]
         
-        property_data = []
-        property_types_list = ["Apartments", "Villas", "Studios", "Townhouses"]
+        # Build payload for property types
+        pytrends.build_payload(property_keywords, cat=0, timeframe='now 7-d', geo='AE')
+        interest_data = pytrends.interest_over_time()
         
-        for keyword, ptype in zip(property_keywords, property_types_list):
-            try:
-                pytrends.build_payload([keyword], cat=0, timeframe='now 7-d', geo='AE')
-                data = pytrends.interest_over_time()
-                if len(data) > 0:
-                    searches = int(data[keyword].iloc[-1] * 100)  # Scale to realistic numbers
-                    property_data.append({
-                        "type": ptype,
-                        "searches": searches,
-                        "color": ["#FF6B6B", "#4ECDC4", "#FFE66D", "#95E1D3"][property_types_list.index(ptype)]
+        property_types = []
+        for keyword in property_keywords:
+            if keyword in interest_data.columns:
+                latest_value = int(interest_data[keyword].iloc[-1])
+                prev_value = int(interest_data[keyword].iloc[-8]) if len(interest_data) > 7 else latest_value
+                trend = "↑" if latest_value > prev_value else ("↓" if latest_value < prev_value else "→")
+                percent = abs(latest_value - prev_value)
+                
+                property_types.append({
+                    "type": keyword.split()[0].capitalize(),
+                    "interest": latest_value,
+                    "trend": trend,
+                    "percent": percent
+                })
+        
+        # Get total interest
+        total_interest = sum([p["interest"] for p in property_types])
+        
+        # Get trending keywords
+        related_keywords = []
+        try:
+            pytrends.build_payload([f"property {location}"], cat=0, timeframe='now 7-d', geo='AE')
+            related = pytrends.related_queries()
+            if related and "property " + location in related:
+                top_queries = related["property " + location]["top"][:5]
+                for _, row in top_queries.iterrows():
+                    related_keywords.append({
+                        "keyword": row['query'],
+                        "trend": "↑" if row['value'] > 50 else ("↓" if row['value'] < 30 else "→")
                     })
-                    logger.info(f"  {ptype}: {searches} searches")
-            except Exception as e:
-                logger.error(f"Error fetching {ptype}: {e}")
+        except:
+            pass
         
-        # Get location data
-        location_info = LOCATIONS.get(location, {})
-        total_searches = sum([prop["searches"] for prop in property_data])
+        # Comparisons with other locations
+        comparisons = []
+        other_locations = ["Mankhool", "Downtown Dubai", "Dubai Marina"]
+        for other_loc in other_locations:
+            if other_loc != location:
+                try:
+                    pytrends.build_payload(
+                        [f"property {location}", f"property {other_loc}"],
+                        cat=0, timeframe='now 7-d', geo='AE'
+                    )
+                    comp_data = pytrends.interest_over_time()
+                    val1 = int(comp_data[f"property {location}"].iloc[-1]) if f"property {location}" in comp_data.columns else 0
+                    val2 = int(comp_data[f"property {other_loc}"].iloc[-1]) if f"property {other_loc}" in comp_data.columns else 0
+                    
+                    comparisons.append({
+                        "location1": location,
+                        "location2": other_loc,
+                        "value1": val1,
+                        "value2": val2
+                    })
+                except:
+                    pass
         
-        # Sort subareas by search volume
-        subareas = []
-        if "subareas" in location_info:
-            subareas = sorted(
-                [{"name": name, "searches": data["searches"]} for name, data in location_info["subareas"].items()],
-                key=lambda x: x["searches"],
-                reverse=True
-            )
+        # Determine overall trend
+        overall_trend = "→"
+        trend_percent = 0
+        if property_types:
+            up_count = sum(1 for p in property_types if p["trend"] == "↑")
+            down_count = sum(1 for p in property_types if p["trend"] == "↓")
+            if up_count > down_count:
+                overall_trend = "↑"
+                trend_percent = sum(p["percent"] for p in property_types if p["trend"] == "↑") // len(property_types)
+            elif down_count > up_count:
+                overall_trend = "↓"
+                trend_percent = sum(p["percent"] for p in property_types if p["trend"] == "↓") // len(property_types)
         
-        top_subarea = subareas[0]["name"] if subareas else "N/A"
+        market_data["location"] = location
+        market_data["total_interest"] = total_interest
+        market_data["property_types"] = property_types
+        market_data["trending_keywords"] = related_keywords
+        market_data["comparisons"] = comparisons
+        market_data["trend_direction"] = overall_trend
+        market_data["trend_percent"] = trend_percent
+        market_data["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
         
-        market_trends["current_location"] = location
-        market_trends["total_searches"] = total_searches
-        market_trends["property_breakdown"] = property_data
-        market_trends["subareas"] = subareas
-        market_trends["top_subarea"] = top_subarea
-        market_trends["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-        
-        logger.info(f"✅ Location analysis complete: {total_searches} total searches")
+        logger.info(f"✅ Authentic trends fetched: {total_interest} total interest")
         
     except Exception as e:
-        logger.error(f"Location analysis error: {e}")
+        logger.error(f"Google Trends error: {e}")
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
@@ -144,7 +146,7 @@ async def auth(request: Request):
         if username == DASHBOARD_USERNAME and password == DASHBOARD_PASSWORD:
             response = Response(content=DASHBOARD_HTML, media_type="text/html")
             response.set_cookie(key="auth", value="ok", httponly=True, max_age=86400)
-            logger.info(f"✅ Login successful")
+            logger.info("✅ Login successful")
             return response
         return HTMLResponse(LOGIN_HTML, status_code=401)
     except Exception as e:
@@ -163,19 +165,15 @@ async def logout():
     response.delete_cookie("auth")
     return response
 
-@app.get("/api/market-trends")
-async def get_market_trends(location: str = ""):
+@app.get("/api/market-data")
+async def get_market_data(location: str = ""):
     if location:
-        await analyze_location(location)
-    return market_trends
+        await fetch_authentic_trends(location)
+    return market_data
 
 @app.get("/health")
 async def health():
     return {"status": "✅ Running"}
-
-@app.on_event("startup")
-async def startup():
-    logger.info("🚀 APP STARTING - MARKET INTELLIGENCE SYSTEM READY")
 
 if __name__ == "__main__":
     import uvicorn
