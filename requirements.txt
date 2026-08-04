@@ -4,3 +4,4 @@ python-multipart
 anthropic>=0.31.0
 requests
 beautifulsoup4
+pytrends
